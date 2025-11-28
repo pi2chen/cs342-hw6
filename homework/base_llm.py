@@ -33,7 +33,7 @@ class BaseLLM:
             {"role": "user", "content": f"Complete this sentence: {question}"},
         ]
         
-        return self.tokenizer.apply_chat_template(messages)
+        return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
     def parse_answer(self, answer: str) -> float:
         """
@@ -140,7 +140,64 @@ class BaseLLM:
                 )
             ]
 
-        raise NotImplementedError()
+        self.tokenizer.padding_side = "left"
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        
+        # Format all prompts
+        formatted_prompts = [self.format_prompt(prompt) for prompt in prompts]
+        
+        # Tokenize with padding and return PyTorch tensors
+        inputs = self.tokenizer(
+            formatted_prompts, 
+            padding=True, 
+            return_tensors="pt"
+        ).to(self.device)
+        
+        # Set generation parameters
+        gen_kwargs = {
+            "max_new_tokens": 50,
+            "eos_token_id": self.tokenizer.eos_token_id,
+            "pad_token_id": self.tokenizer.pad_token_id if self.tokenizer.pad_token_id else self.tokenizer.eos_token_id,
+            "do_sample": temperature > 0,
+        }
+        
+        if temperature > 0:
+            gen_kwargs["temperature"] = temperature
+        
+        if num_return_sequences is not None:
+            gen_kwargs["num_return_sequences"] = num_return_sequences
+        
+        # Generate outputs with both input_ids and attention_mask
+        with torch.no_grad():
+            outputs = self.model.generate(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                **gen_kwargs
+            )
+        
+        # Decode only the generated tokens (mask out the input)
+        input_len = inputs["input_ids"].shape[1]
+        generated_tokens = outputs[:, input_len:]
+        decoded_outputs = self.tokenizer.batch_decode(
+            generated_tokens, 
+            skip_special_tokens=True
+        )
+        
+        # Strip whitespace from decoded outputs
+        decoded_outputs = [output.strip() for output in decoded_outputs]
+        
+        # Reshape if num_return_sequences is specified
+        if num_return_sequences is not None:
+            # Reshape from flat list to list[list[str]]
+            reshaped = []
+            for i in range(len(prompts)):
+                start_idx = i * num_return_sequences
+                end_idx = start_idx + num_return_sequences
+                reshaped.append(decoded_outputs[start_idx:end_idx])
+            return reshaped
+        
+        return decoded_outputs
 
     def answer(self, *questions) -> list[float]:
         """
