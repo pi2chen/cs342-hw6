@@ -28,12 +28,15 @@ class BaseLLM:
         This would be a default implementation applies a basic chat template.
         Override this in subclasses for different behavior (e.g., SFT/RFT models should return raw questions).
         """
+        system_msg = "You are a helpful assistant that answers questions with a single number. You may answer in the format <answer>number</answer>"
         messages = [
-            {"role": "system", "content": "You are a helpful assistant that completes sentences naturally and concisely."},
-            {"role": "user", "content": f"Complete this sentence: {question}"},
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": question},
         ]
-        
-        return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+        return self.tokenizer.apply_chat_template(
+            messages, add_generation_prompt=True, tokenize=False
+        )
 
     def parse_answer(self, answer: str) -> float:
         """
@@ -57,15 +60,10 @@ class BaseLLM:
         - decode the outputs with self.tokenizer.decode
 
         """
-        formatted = self.format_prompt(prompt)
-        input = self.tokenizer(formatted, return_tensors="pt").to(self.device)
-        output = self.model.generate(
-            **input,
-            max_new_tokens=50,
-            do_sample=False,
-            eos_token_id=self.tokenizer.eos_token_id,
-        )
-        return self.tokenizer.decode(output[0], skip_special_tokens=True)
+        formatted_prompt = self.format_prompt(prompt)
+        inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
+        outputs = self.model.generate(**inputs, max_new_tokens=50, eos_token_id=self.tokenizer.eos_token_id)
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         # return self.batched_generate([prompt])[0]   # If you feel confident, just use this line of code and move straight to batched_generate.
 
     @overload
