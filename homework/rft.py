@@ -8,7 +8,7 @@ class RFTModel(BaseLLM):
         RFT models are trained on raw questions without chat templates.
         Return the question as-is.
         """
-        raise NotImplementedError()
+        return question
 
 
 def load() -> RFTModel:
