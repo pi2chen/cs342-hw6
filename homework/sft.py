@@ -88,43 +88,36 @@ def train_model(
     output_dir: str = "./homework/sft_model",
     **kwargs,
 ):
+    # The following code (sft.py:92-139) was written by Claude Opus 4.5.
     from peft import LoraConfig, get_peft_model
     from transformers import Trainer, TrainingArguments
 
-    # Create the base model
     llm = SFTModel()
     
-    # Configure LoRA - using higher rank for more capacity
-    # r=32 with alpha=128 (4x rank) for better learning
     lora_config = LoraConfig(
-        r=32,
-        lora_alpha=128,
+        r=8,
+        lora_alpha=32,
         target_modules="all-linear",
         bias="none",
         task_type="CAUSAL_LM",
     )
     
-    # Apply LoRA to the model
     llm.model = get_peft_model(llm.model, lora_config)
     
-    # Enable input gradients for GPU training with gradient checkpointing
     llm.model.enable_input_require_grads()
     
-    # Print trainable parameters info
     llm.model.print_trainable_parameters()
     
-    # Create tokenized dataset
     train_data = Dataset("train")
     tokenized_train = TokenizedDataset(llm.tokenizer, train_data, format_example)
     
-    # Training arguments - more epochs, warmup, and weight decay
     training_args = TrainingArguments(
         output_dir=output_dir,
         logging_dir=output_dir,
         report_to="tensorboard",
         num_train_epochs=5,
         per_device_train_batch_size=32,
-        learning_rate=1e-4,
+        learning_rate=5e-4,
         warmup_ratio=0.1,
         weight_decay=0.01,
         gradient_checkpointing=True,
@@ -133,17 +126,14 @@ def train_model(
         remove_unused_columns=False,
     )
     
-    # Create trainer
     trainer = Trainer(
         model=llm.model,
         args=training_args,
         train_dataset=tokenized_train,
     )
     
-    # Train the model
     trainer.train()
     
-    # Save the LoRA adapter
     llm.model.save_pretrained(output_dir)
     
     test_model(output_dir)
