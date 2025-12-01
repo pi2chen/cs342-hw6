@@ -28,6 +28,7 @@ class BaseLLM:
         This would be a default implementation applies a basic chat template.
         Override this in subclasses for different behavior (e.g., SFT/RFT models should return raw questions).
         """
+        # The following code (base_llm.py:32-40) was written by Claude Opus 4.5.
         system_msg = "You are a helpful assistant that answers questions with a single number. You may answer in the format <answer>number</answer>"
         messages = [
             {"role": "system", "content": system_msg},
@@ -60,6 +61,7 @@ class BaseLLM:
         - decode the outputs with self.tokenizer.decode
 
         """
+        # The following code (base_llm.py:64-67) was written by GPT 4.1.
         formatted_prompt = self.format_prompt(prompt)
         inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
         outputs = self.model.generate(**inputs, max_new_tokens=50, eos_token_id=self.tokenizer.eos_token_id)
@@ -137,22 +139,20 @@ class BaseLLM:
                     temperature,
                 )
             ]
-
+        
+        # The following code (base_llm.py:142-191) was written by Claude Opus 4.5.
         self.tokenizer.padding_side = "left"
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
-        # Format all prompts
         formatted_prompts = [self.format_prompt(prompt) for prompt in prompts]
         
-        # Tokenize with padding and return PyTorch tensors
         inputs = self.tokenizer(
             formatted_prompts, 
             padding=True, 
             return_tensors="pt"
         ).to(self.device)
         
-        # Set generation parameters
         gen_kwargs = {
             "max_new_tokens": 50,
             "eos_token_id": self.tokenizer.eos_token_id,
@@ -166,7 +166,6 @@ class BaseLLM:
         if num_return_sequences is not None:
             gen_kwargs["num_return_sequences"] = num_return_sequences
         
-        # Generate outputs with both input_ids and attention_mask
         with torch.no_grad():
             outputs = self.model.generate(
                 input_ids=inputs["input_ids"],
@@ -174,7 +173,6 @@ class BaseLLM:
                 **gen_kwargs
             )
         
-        # Decode only the generated tokens (mask out the input)
         input_len = inputs["input_ids"].shape[1]
         generated_tokens = outputs[:, input_len:]
         decoded_outputs = self.tokenizer.batch_decode(
@@ -182,12 +180,9 @@ class BaseLLM:
             skip_special_tokens=True
         )
         
-        # Strip whitespace from decoded outputs
         decoded_outputs = [output.strip() for output in decoded_outputs]
         
-        # Reshape if num_return_sequences is specified
         if num_return_sequences is not None:
-            # Reshape from flat list to list[list[str]]
             reshaped = []
             for i in range(len(prompts)):
                 start_idx = i * num_return_sequences
